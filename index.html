@@ -217,9 +217,11 @@
       requestAnimationFrame(gameLoop);
     }
 
-    canvas.addEventListener('click', () => {
+    canvas.addEventListener('click', (e) => {
+      e.preventDefault();
       if (gameState === 'playing') {
         mermaid.velocity = jumpForce;
+        mermaid.rotation = -Math.PI / 6; // Rotação imediata para cima
       } else if (gameState === 'gameOver') {
         resetGame();
       }
@@ -229,6 +231,7 @@
       e.preventDefault();
       if (gameState === 'playing') {
         mermaid.velocity = jumpForce;
+        mermaid.rotation = -Math.PI / 6; // Rotação imediata para cima
       } else if (gameState === 'gameOver') {
         resetGame();
       }
