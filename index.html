@@ -1,24 +1,620 @@
 <!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>single-file-mermaid-swim</title>
-    <meta name="description" content="Lovable Generated Project" />
-    <meta name="author" content="Lovable" />
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sereia Flappy</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
-    <meta property="og:title" content="single-file-mermaid-swim" />
-    <meta property="og:description" content="Lovable Generated Project" />
-    <meta property="og:type" content="website" />
-    <meta property="og:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #FFB6C1, #FFC0CB, #FFD1DC);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
 
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:site" content="@lovable_dev" />
-    <meta name="twitter:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
-  </head>
+        .game-container {
+            position: relative;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            background: #FFC0CB;
+        }
 
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+        #gameCanvas {
+            display: block;
+            cursor: pointer;
+            touch-action: none;
+        }
+
+        .hud {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            text-align: center;
+            z-index: 10;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+        }
+
+        .score {
+            font-size: 36px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .high-score {
+            font-size: 16px;
+            opacity: 0.8;
+        }
+
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            text-align: center;
+            z-index: 20;
+        }
+
+        .overlay h1 {
+            font-size: 48px;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+            background: linear-gradient(45deg, #FF69B4, #FFB6C1, #FF1493);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .overlay p {
+            font-size: 20px;
+            margin-bottom: 30px;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+        }
+
+        .btn {
+            background: linear-gradient(45deg, #FF69B4, #FF1493);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 18px;
+            font-weight: bold;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 5px 15px rgba(255, 20, 147, 0.4);
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 7px 20px rgba(255, 20, 147, 0.6);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        @media (max-width: 480px) {
+            .overlay h1 {
+                font-size: 36px;
+            }
+            .score {
+                font-size: 28px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <canvas id="gameCanvas" width="360" height="640"></canvas>
+        
+        <div class="hud">
+            <div class="score" id="scoreDisplay">0</div>
+            <div class="high-score" id="highScoreDisplay">Melhor: 0</div>
+        </div>
+
+        <div class="overlay" id="menuOverlay">
+            <h1>🧜‍♀️ Sereia Flappy</h1>
+            <p>Toque para nadar e evite os rabos de baleia!</p>
+            <button class="btn" onclick="startGame()">Começar</button>
+        </div>
+
+        <div class="overlay hidden" id="gameOverOverlay">
+            <h1>Game Over!</h1>
+            <p id="finalScore">Pontuação: 0</p>
+            <p id="newRecord" class="hidden" style="color: #FFD700; font-weight: bold;">🏆 Novo Recorde!</p>
+            <button class="btn" onclick="restartGame()">Jogar Novamente</button>
+        </div>
+    </div>
+
+    <script>
+        // ========== CONFIG ==========
+        const CONFIG = {
+            gravity: 0.6,
+            jumpForce: -12,
+            obstacleSpeed: 3,
+            obstacleSpacing: 200,
+            obstacleGap: 180,
+            obstacleWidth: 60,
+            mermaidSize: 25,
+            bubbleCount: 15
+        };
+
+        // ========== ESTADO DO JOGO ==========
+        const STATES = {
+            MENU: 'menu',
+            PLAYING: 'playing',
+            GAME_OVER: 'game_over'
+        };
+
+        let gameState = STATES.MENU;
+        let score = 0;
+        let highScore = localStorage.getItem('mermaidHighScore') || 0;
+        let lastTime = 0;
+
+        // ========== CANVAS E CONTEXTO ==========
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Ajustar para dispositivos de alta resolução
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = 360 * dpr;
+        canvas.height = 640 * dpr;
+        canvas.style.width = '360px';
+        canvas.style.height = '640px';
+        ctx.scale(dpr, dpr);
+
+        // ========== ENTIDADES ==========
+        class Mermaid {
+            constructor() {
+                this.x = 80;
+                this.y = 320;
+                this.velocity = 0;
+                this.radius = CONFIG.mermaidSize;
+                this.tailAngle = 0;
+                this.swimAnimation = 0;
+            }
+
+            update(dt) {
+                if (gameState !== STATES.PLAYING) return;
+
+                this.velocity += CONFIG.gravity;
+                this.y += this.velocity;
+                this.tailAngle += dt * 0.01;
+                this.swimAnimation += dt * 0.008;
+
+                // Limites da tela
+                if (this.y - this.radius < 0) {
+                    this.y = this.radius;
+                    this.velocity = 0;
+                }
+                if (this.y + this.radius > canvas.height / dpr) {
+                    gameOver();
+                }
+            }
+
+            jump() {
+                if (gameState === STATES.PLAYING) {
+                    this.velocity = CONFIG.jumpForce;
+                }
+            }
+
+            draw() {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+
+                // Rotação sutil baseada na velocidade
+                const rotation = Math.max(-0.5, Math.min(0.5, this.velocity * 0.05));
+                ctx.rotate(rotation);
+
+                // Corpo da sereia
+                ctx.fillStyle = '#F4C2A1'; // Tom de pele
+                ctx.beginPath();
+                ctx.ellipse(0, -5, 12, 18, 0, 0, 2 * Math.PI);
+                ctx.fill();
+
+                // Top lilás
+                ctx.fillStyle = '#DDA0DD';
+                ctx.beginPath();
+                ctx.ellipse(0, -15, 10, 8, 0, 0, 2 * Math.PI);
+                ctx.fill();
+
+                // Cauda verde com animação
+                const tailOffset = Math.sin(this.tailAngle) * 3;
+                ctx.fillStyle = '#20B2AA';
+                ctx.beginPath();
+                ctx.ellipse(tailOffset, 15, 8, 20, 0, 0, 2 * Math.PI);
+                ctx.fill();
+
+                // Nadadeira da cauda
+                ctx.fillStyle = '#008B8B';
+                ctx.beginPath();
+                ctx.ellipse(tailOffset * 1.5, 35, 12, 8, 0, 0, 2 * Math.PI);
+                ctx.fill();
+
+                // Cabelo vermelho
+                ctx.fillStyle = '#DC143C';
+                ctx.beginPath();
+                ctx.ellipse(-8, -20, 15, 20, -0.3, 0, 2 * Math.PI);
+                ctx.fill();
+
+                // Rosto
+                ctx.fillStyle = '#F4C2A1';
+                ctx.beginPath();
+                ctx.arc(0, -20, 8, 0, 2 * Math.PI);
+                ctx.fill();
+
+                // Olhos
+                ctx.fillStyle = '#000';
+                ctx.beginPath();
+                ctx.arc(-3, -22, 1.5, 0, 2 * Math.PI);
+                ctx.arc(3, -22, 1.5, 0, 2 * Math.PI);
+                ctx.fill();
+
+                // Sorriso
+                ctx.strokeStyle = '#000';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.arc(0, -18, 3, 0, Math.PI);
+                ctx.stroke();
+
+                ctx.restore();
+            }
+
+            getBounds() {
+                return {
+                    x: this.x - this.radius,
+                    y: this.y - this.radius,
+                    width: this.radius * 2,
+                    height: this.radius * 2
+                };
+            }
+        }
+
+        class Obstacle {
+            constructor(x, gapY) {
+                this.x = x;
+                this.gapY = gapY;
+                this.width = CONFIG.obstacleWidth;
+                this.gapSize = CONFIG.obstacleGap;
+                this.passed = false;
+                this.waveOffset = Math.random() * Math.PI * 2;
+            }
+
+            update(dt) {
+                if (gameState !== STATES.PLAYING) return;
+                this.x -= CONFIG.obstacleSpeed;
+                this.waveOffset += dt * 0.003;
+            }
+
+            draw() {
+                const wave = Math.sin(this.waveOffset) * 5;
+
+                // Rabo de baleia superior
+                this.drawWhaleTail(this.x, 0, this.gapY - this.gapSize / 2 + wave, true);
+                
+                // Rabo de baleia inferior
+                this.drawWhaleTail(this.x, this.gapY + this.gapSize / 2 + wave, canvas.height / dpr, false);
+            }
+
+            drawWhaleTail(x, y1, y2, isTop) {
+                const height = y2 - y1;
+                
+                ctx.fillStyle = '#1E90FF';
+                ctx.fillRect(x, y1, this.width, height);
+
+                // Detalhes do rabo
+                ctx.fillStyle = '#4169E1';
+                
+                if (isTop) {
+                    // Nadadeira na parte inferior do obstáculo superior
+                    const finY = y2 - 20;
+                    ctx.beginPath();
+                    ctx.moveTo(x, finY);
+                    ctx.lineTo(x + this.width, finY);
+                    ctx.lineTo(x + this.width / 2, finY + 15);
+                    ctx.closePath();
+                    ctx.fill();
+                } else {
+                    // Nadadeira na parte superior do obstáculo inferior
+                    const finY = y1 + 20;
+                    ctx.beginPath();
+                    ctx.moveTo(x, finY);
+                    ctx.lineTo(x + this.width, finY);
+                    ctx.lineTo(x + this.width / 2, finY - 15);
+                    ctx.closePath();
+                    ctx.fill();
+                }
+
+                // Linhas decorativas
+                ctx.strokeStyle = '#000080';
+                ctx.lineWidth = 2;
+                for (let i = 1; i < 4; i++) {
+                    const lineY = y1 + (height / 4) * i;
+                    ctx.beginPath();
+                    ctx.moveTo(x + 5, lineY);
+                    ctx.lineTo(x + this.width - 5, lineY);
+                    ctx.stroke();
+                }
+            }
+
+            getBounds() {
+                return [
+                    // Obstáculo superior
+                    {
+                        x: this.x,
+                        y: 0,
+                        width: this.width,
+                        height: this.gapY - this.gapSize / 2
+                    },
+                    // Obstáculo inferior
+                    {
+                        x: this.x,
+                        y: this.gapY + this.gapSize / 2,
+                        width: this.width,
+                        height: canvas.height / dpr - (this.gapY + this.gapSize / 2)
+                    }
+                ];
+            }
+
+            isOffScreen() {
+                return this.x + this.width < 0;
+            }
+
+            checkScore(mermaid) {
+                if (!this.passed && mermaid.x > this.x + this.width) {
+                    this.passed = true;
+                    return true;
+                }
+                return false;
+            }
+        }
+
+        class Bubble {
+            constructor() {
+                this.x = Math.random() * (canvas.width / dpr);
+                this.y = canvas.height / dpr + Math.random() * 100;
+                this.radius = Math.random() * 8 + 3;
+                this.speed = Math.random() * 1 + 0.5;
+                this.opacity = Math.random() * 0.6 + 0.2;
+                this.wobble = Math.random() * 0.02 + 0.01;
+                this.wobbleOffset = Math.random() * Math.PI * 2;
+            }
+
+            update(dt) {
+                this.y -= this.speed;
+                this.wobbleOffset += this.wobble;
+                this.x += Math.sin(this.wobbleOffset) * 0.5;
+
+                if (this.y + this.radius < 0) {
+                    this.y = canvas.height / dpr + this.radius;
+                    this.x = Math.random() * (canvas.width / dpr);
+                }
+            }
+
+            draw() {
+                ctx.save();
+                ctx.globalAlpha = this.opacity;
+                ctx.fillStyle = '#E6F3FF';
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, 2 * Math.PI);
+                ctx.fill();
+                
+                // Brilho na bolha
+                ctx.fillStyle = '#FFFFFF';
+                ctx.beginPath();
+                ctx.arc(this.x - this.radius / 3, this.y - this.radius / 3, this.radius / 3, 0, 2 * Math.PI);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        // ========== INSTÂNCIAS DO JOGO ==========
+        const mermaid = new Mermaid();
+        let obstacles = [];
+        let bubbles = [];
+        let obstacleTimer = 0;
+
+        // Inicializar bolhas
+        for (let i = 0; i < CONFIG.bubbleCount; i++) {
+            bubbles.push(new Bubble());
+        }
+
+        // ========== INPUT ==========
+        function setupInput() {
+            canvas.addEventListener('click', handleInput);
+            canvas.addEventListener('touchstart', handleInput);
+            
+            document.addEventListener('keydown', (e) => {
+                if (e.code === 'Space') {
+                    e.preventDefault();
+                    handleInput();
+                }
+            });
+        }
+
+        function handleInput(e) {
+            e.preventDefault();
+            
+            if (gameState === STATES.MENU) {
+                startGame();
+            } else if (gameState === STATES.PLAYING) {
+                mermaid.jump();
+            }
+        }
+
+        // ========== COLISÃO ==========
+        function checkCollisions() {
+            const mermaidBounds = mermaid.getBounds();
+            
+            for (let obstacle of obstacles) {
+                const obstacleBounds = obstacle.getBounds();
+                
+                for (let bound of obstacleBounds) {
+                    if (mermaidBounds.x < bound.x + bound.width &&
+                        mermaidBounds.x + mermaidBounds.width > bound.x &&
+                        mermaidBounds.y < bound.y + bound.height &&
+                        mermaidBounds.y + mermaidBounds.height > bound.y) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        // ========== GAME LOOP ==========
+        function gameLoop(currentTime) {
+            const deltaTime = currentTime - lastTime;
+            lastTime = currentTime;
+
+            update(deltaTime);
+            render();
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        function update(dt) {
+            // Atualizar bolhas sempre
+            bubbles.forEach(bubble => bubble.update(dt));
+
+            if (gameState !== STATES.PLAYING) return;
+
+            mermaid.update(dt);
+
+            // Gerar obstáculos
+            obstacleTimer += dt;
+            if (obstacleTimer > CONFIG.obstacleSpacing) {
+                const gapY = Math.random() * (canvas.height / dpr - CONFIG.obstacleGap - 100) + 50 + CONFIG.obstacleGap / 2;
+                obstacles.push(new Obstacle(canvas.width / dpr, gapY));
+                obstacleTimer = 0;
+            }
+
+            // Atualizar obstáculos
+            obstacles.forEach(obstacle => {
+                obstacle.update(dt);
+                
+                // Verificar pontuação
+                if (obstacle.checkScore(mermaid)) {
+                    score++;
+                    updateScore();
+                }
+            });
+
+            // Remover obstáculos fora da tela
+            obstacles = obstacles.filter(obstacle => !obstacle.isOffScreen());
+
+            // Verificar colisões
+            if (checkCollisions()) {
+                gameOver();
+            }
+        }
+
+        function render() {
+            // Limpar canvas com gradiente de fundo
+            const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height / dpr);
+            gradient.addColorStop(0, '#FFB6C1');
+            gradient.addColorStop(0.5, '#FFC0CB');
+            gradient.addColorStop(1, '#FFD1DC');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width / dpr, canvas.height / dpr);
+
+            // Desenhar bolhas
+            bubbles.forEach(bubble => bubble.draw());
+
+            // Desenhar obstáculos
+            obstacles.forEach(obstacle => obstacle.draw());
+
+            // Desenhar sereia
+            mermaid.draw();
+        }
+
+        // ========== CONTROLE DE ESTADO ==========
+        function startGame() {
+            gameState = STATES.PLAYING;
+            document.getElementById('menuOverlay').classList.add('hidden');
+            mermaid.y = 320;
+            mermaid.velocity = 0;
+            obstacles = [];
+            obstacleTimer = 0;
+            score = 0;
+            updateScore();
+        }
+
+        function gameOver() {
+            gameState = STATES.GAME_OVER;
+            
+            // Verificar novo recorde
+            let isNewRecord = false;
+            if (score > highScore) {
+                highScore = score;
+                localStorage.setItem('mermaidHighScore', highScore);
+                isNewRecord = true;
+            }
+
+            // Mostrar tela de game over
+            document.getElementById('finalScore').textContent = `Pontuação: ${score}`;
+            document.getElementById('newRecord').classList.toggle('hidden', !isNewRecord);
+            document.getElementById('gameOverOverlay').classList.remove('hidden');
+            updateHighScore();
+        }
+
+        function restartGame() {
+            document.getElementById('gameOverOverlay').classList.add('hidden');
+            startGame();
+        }
+
+        function updateScore() {
+            document.getElementById('scoreDisplay').textContent = score;
+        }
+
+        function updateHighScore() {
+            document.getElementById('highScoreDisplay').textContent = `Melhor: ${highScore}`;
+        }
+
+        // ========== INICIALIZAÇÃO ==========
+        function init() {
+            setupInput();
+            updateHighScore();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Aguardar o carregamento completo
+        window.addEventListener('load', init);
+
+        // Redimensionamento responsivo
+        window.addEventListener('resize', () => {
+            const container = document.querySelector('.game-container');
+            const maxWidth = Math.min(window.innerWidth - 40, 360);
+            const maxHeight = Math.min(window.innerHeight - 40, 640);
+            const scale = Math.min(maxWidth / 360, maxHeight / 640);
+            
+            container.style.transform = `scale(${scale})`;
+        });
+
+        // Trigger do redimensionamento inicial
+        window.dispatchEvent(new Event('resize'));
+    </script>
+</body>
 </html>
